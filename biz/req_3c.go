@@ -2,7 +2,7 @@ package biz
 
 import (
 	"bytes"
-	"ehc-hsm-server/utils"
+	"ehc-hsm-server/pkg/rwbytes"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/tjfoc/gmsm/sm3"
@@ -12,11 +12,11 @@ import (
 type Digest3cReq struct {
 	ReqCode          string
 	AlgorithmPattern string
-	DataLength       int32
+	DataLength       int
 	Data             []byte
 	EndStr           string
-	Var3Length       int32
-	Var4Length       int32
+	Var3Length       int
+	Var4Length       int
 }
 
 //3c生成摘要
@@ -43,19 +43,31 @@ func NewDigest3c() *Digest3c {
 	return &Digest3c{&req, &res}
 }
 
-func (c *Digest3c) Decode(buf []byte) error {
+func (req *Digest3cReq) Decode(buf []byte) error {
 	in := bytes.NewBuffer(buf)
 
 	var err error = nil
-	c.req.ReqCode, err = utils.ReadString(in, 2)
-	c.req.AlgorithmPattern, err = utils.ReadString(in, 2)
-	c.req.DataLength, err = utils.ReadInt(in, 4)
-	c.req.Data, err = utils.ReadBytes(in, c.req.DataLength)
-	c.req.EndStr, err = utils.ReadString(in, 1)
-	c.req.Var3Length, err = utils.ReadInt(in, 4)
-	c.req.Var4Length, err = utils.ReadInt(in, 4)
-	log.Printf("请求参数：%v", c.req)
+	req.ReqCode, err = rwbytes.ReadString(in, 2)
+	req.AlgorithmPattern, err = rwbytes.ReadString(in, 2)
+	req.DataLength, err = rwbytes.ReadInt(in, 4)
+	req.Data, err = rwbytes.ReadBytes(in, req.DataLength)
+	req.EndStr, err = rwbytes.ReadString(in, 1)
+	req.Var3Length, err = rwbytes.ReadInt(in, 4)
+	req.Var4Length, err = rwbytes.ReadInt(in, 4)
+	log.Printf("请求参数：%v", req)
 	return err
+}
+
+func (req *Digest3cReq) Encode() ([]byte, error) {
+	in := new(bytes.Buffer)
+	rwbytes.WriteString(in, 2, req.ReqCode)
+	rwbytes.WriteString(in, 2, req.AlgorithmPattern)
+	rwbytes.WriteInt(in, 4, req.DataLength)
+	rwbytes.WriteBytes(in, req.DataLength, req.Data)
+	rwbytes.WriteString(in, 1, req.EndStr)
+	rwbytes.WriteInt(in, 4, req.Var3Length)
+	rwbytes.WriteInt(in, 4, req.Var4Length)
+	return in.Bytes(), nil
 }
 
 func (c *Digest3c) setData(data []byte) {
@@ -68,18 +80,38 @@ func (c *Digest3c) setData(data []byte) {
 	}
 }
 
-func (c *Digest3c) Encode() ([]byte, error) {
+func (res *Digest3cRes) Encode() ([]byte, error) {
 	buf := bytes.Buffer{}
-	buf.Write([]byte(c.res.ReqCode))
-	buf.Write([]byte(c.res.ErrCode))
+	buf.Write([]byte(res.ReqCode))
+	buf.Write([]byte(res.ErrCode))
 
 	//byte[] len = Strings.padStart(DataLength + "", 2, '0').getBytes(Charsets.ISO_8859_1);
-	lenStr := fmt.Sprintf("%02d", c.res.DataLength)
+	lenStr := fmt.Sprintf("%02d", res.DataLength)
 	buf.Write([]byte(lenStr))
-	if c.res.Data != nil {
-		buf.Write(c.res.Data)
+	if res.Data != nil {
+		buf.Write(res.Data)
 	}
 	return buf.Bytes(), nil
+}
+
+func (res *Digest3cRes) Decode() ([]byte, error) {
+	buf := bytes.Buffer{}
+	buf.Write([]byte(res.ReqCode))
+	buf.Write([]byte(res.ErrCode))
+
+	lenStr := fmt.Sprintf("%02d", res.DataLength)
+	buf.Write([]byte(lenStr))
+	if res.Data != nil {
+		buf.Write(res.Data)
+	}
+	return buf.Bytes(), nil
+}
+
+func (c *Digest3c) Decode(buf []byte) error {
+	return c.req.Decode(buf)
+}
+func (c *Digest3c) Encode() ([]byte, error) {
+	return c.res.Encode()
 }
 
 func (c *Digest3c) Handle() error {

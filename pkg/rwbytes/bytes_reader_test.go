@@ -1,9 +1,10 @@
-package utils
+package rwbytes
 
 import (
 	"bytes"
 	"encoding/hex"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -21,41 +22,30 @@ func TestReadBytes(t *testing.T) {
 		t.Fail()
 	}
 	log.Println("ReadBytes=", hex.EncodeToString(out))
+	assert.Equal(t, "004a", hex.EncodeToString(out))
 }
 
 func TestReadInt(t *testing.T) {
-	byte, err := hex.DecodeString("0035")
-	if err != nil {
-		t.Fail()
-	}
-
-	buf := bytes.NewBuffer(byte)
+	buf := bytes.NewBufferString("35")
 	out, err := ReadInt(buf, 2)
 	if err != nil {
 		t.Fail()
 	}
-	log.Println("ReadInt=", out)
+	log.Printf("ReadInt=%d", out)
+	assert.Equal(t, int32(35), out)
 }
 
 func TestReadIntHex(t *testing.T) {
-	byte, err := hex.DecodeString("0035")
-	if err != nil {
-		t.Fail()
-	}
-
-	buf := bytes.NewBuffer(byte)
+	buf := bytes.NewBufferString("35")
 	out, err := ReadIntHex(buf, 2)
 	if err != nil {
 		t.Fail()
 	}
-	log.Println("ReadIntHex2=", out)
-}
+	assert.Equal(t, int32(53), out)
 
-//
-//func TestReadString(t *testing.T) {
-//	res := biz.NewNcRes()
-//	res.ErrCode = "00"
-//	res.Data = "08D7B4FB629D0885H1.25.11M1.17.02C1.16.10V1310-000035"
-//	out := res.Encode()
-//	log.Println(hex.EncodeToString(out)) // 104
-//}
+	out, err = ReadIntHex(bytes.NewBufferString("0A"), 2)
+	if err != nil {
+		t.Fail()
+	}
+	assert.Equal(t, int32(10), out)
+}

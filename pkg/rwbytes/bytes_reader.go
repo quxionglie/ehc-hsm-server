@@ -1,4 +1,4 @@
-package utils
+package rwbytes
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ func toUtf8(iso8859_1_buf []byte) string {
  * @param length 长度
  * @return 字符串
  */
-func ReadString(in *bytes.Buffer, length int32) (string, error) {
+func ReadString(in *bytes.Buffer, length int) (string, error) {
 	bytes, err := ReadBytes(in, length)
 	if err != nil {
 		return "", err
@@ -36,7 +36,7 @@ func ReadString(in *bytes.Buffer, length int32) (string, error) {
  * @param length 长度
  * @return 字符数组
  */
-func ReadBytes(in *bytes.Buffer, length int32) ([]byte, error) {
+func ReadBytes(in *bytes.Buffer, length int) ([]byte, error) {
 	bytes := make([]byte, length)
 	_, err := in.Read(bytes)
 	if err != nil {
@@ -45,14 +45,9 @@ func ReadBytes(in *bytes.Buffer, length int32) ([]byte, error) {
 	return bytes, nil
 }
 
-/**
- * 读整数
- *
- * @param in     ByteBuf
- * @param length 长度
- * @return 整数
- */
-func ReadInt(in *bytes.Buffer, length int32) (int32, error) {
+// 读整数：从Buffer中读取指定长度的字节数组并转成字符串后，再将10进制字符串转成整数
+// 如： []byte("10")  --> "10" --> 转成整数 10
+func ReadInt(in *bytes.Buffer, length int) (int, error) {
 	s, err := ReadString(in, length)
 	if err != nil {
 		return 0, err
@@ -62,16 +57,12 @@ func ReadInt(in *bytes.Buffer, length int32) (int32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return int32(j), nil
+	return int(j), nil
 }
 
-/**
- * 读整数
- * @param in ByteBuf
- * @param length 长度
- * @return 整数
- */
-func ReadIntHex(in *bytes.Buffer, length int32) (int32, error) {
+// 读整数：把字节数组读出字符串后，再将16进制字符串转成整数
+// 如： []byte("10")  --> "10" --> 转成整数 10
+func ReadIntHex(in *bytes.Buffer, length int) (int, error) {
 	s, err := ReadString(in, length)
 	if err != nil {
 		return 0, err
@@ -80,5 +71,5 @@ func ReadIntHex(in *bytes.Buffer, length int32) (int32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return int32(j), nil
+	return int(j), nil
 }

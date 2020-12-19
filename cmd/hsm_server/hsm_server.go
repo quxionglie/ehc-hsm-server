@@ -1,16 +1,11 @@
 package main
 
 import (
-	"bufio"
-	"context"
 	"ehc-hsm-server/biz"
-	"encoding/binary"
-	"github.com/google/uuid"
+	"ehc-hsm-server/hsm"
 	log "github.com/sirupsen/logrus"
-	"io"
 	"net"
 	"os"
-	"strings"
 )
 
 func init() {
@@ -43,28 +38,16 @@ func main() {
 }
 
 func handConn(conn net.Conn) {
-	reader := bufio.NewReader(conn)
-	//writer := bufio.NewWriter(conn)
 	for {
-		var msgSize int16
-		// message size
-		err := binary.Read(reader, binary.BigEndian, &msgSize)
-		if err != nil {
-			return
-		}
+		hsm := hsm.NewHsm(conn)
 
-		uuid := strings.ReplaceAll(uuid.New().String(), "-", "")
-		ctx := context.WithValue(context.Background(), "tradeId", uuid)
-		log.Printf("读取数据头字节长度=%d,\n", msgSize)
-		//从缓存区读取大小为数据长度的数据
-		data := make([]byte, msgSize)
-		_, err = io.ReadFull(reader, data)
+		data, err := hsm.Read()
 		if err != nil {
 			continue
 		}
 
-		outBytes := biz.HandMsg(ctx, data)
-		conn.Write(outBytes)
+		outBytes := biz.HandMsg(data)
+		hsm.Write(outBytes)
 	}
 }
 

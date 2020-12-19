@@ -2,10 +2,8 @@ package biz
 
 import (
 	"bytes"
-	"context"
 	"crypto/md5"
-	"ehc-hsm-server/utils"
-	"encoding/binary"
+	"ehc-hsm-server/pkg/rwbytes"
 	"encoding/hex"
 	"errors"
 	log "github.com/sirupsen/logrus"
@@ -36,31 +34,47 @@ const SAFE_KEY string = "0123456789ABCDEFFEDCBA9876543210"
 // 保护密钥
 const PROTECT_KEY string = "11223344556677888877665544332211"
 
-type HsmReq struct {
-	ReqCode string
-}
-
-/**
- * 解码
- *
- * @param in 字节缓存
- */
-func (*HsmReq) decode(in bytes.Buffer) {
-
-}
-
 var ERROR_REQ = errors.New("Error reqCode")
 
-func HandMsg(ctx context.Context, buf []byte) []byte {
-	log.WithField("tradeId", ctx.Value("tradeId")).Printf("请求数据=[%s]", hex.EncodeToString(buf))
+func HandMsg(buf []byte) []byte {
+	log.Printf("请求数据=[%s]", hex.EncodeToString(buf))
 
 	in := bytes.NewBuffer(buf)
-	reqCode, err := utils.ReadString(in, 2)
+	reqCode, err := rwbytes.ReadString(in, 2)
 	if err != nil {
+		log.Printf("err:%v", err)
 		return nil
 	}
 
 	var out []byte
+	biz := newBizReq(reqCode)
+	err = biz.Decode(buf)
+	if err != nil {
+		log.Printf("err:%v", err)
+		return nil
+	}
+	err = biz.Handle()
+	if err != nil {
+		log.Printf("err:%v", err)
+		return nil
+	}
+	out, err = biz.Encode()
+	if err != nil {
+		log.Printf("err:%v", err)
+		return nil
+	}
+	hexStr := hex.EncodeToString(out)
+	log.Printf("响应数据=[%X]", out)
+	dataLength := len(hexStr)
+	log.Printf("响应数据=%d,%s", dataLength, hexStr)
+
+	log.Printf("响应数据md5=%X", md5.Sum(out))
+	log.Printf("响应数据=[%s]", hex.EncodeToString(out))
+	//out = LengthFieldPrepend(out)
+	return out
+}
+
+func newBizReq(reqCode string) BizHandle {
 	var biz BizHandle
 	if REQ_CODE_NC == reqCode {
 		//获取设备信息
@@ -78,33 +92,5 @@ func HandMsg(ctx context.Context, buf []byte) []byte {
 		//验证健康卡或解密时间
 		biz = NewS4()
 	}
-
-	biz.Decode(buf)
-	biz.Handle()
-	out, err = biz.Encode()
-
-	hexStr := hex.EncodeToString(out)
-	log.WithField("tradeId", ctx.Value("tradeId")).Printf("响应数据=[%X]", out)
-	dataLength := len(hexStr)
-	log.WithField("tradeId", ctx.Value("tradeId")).Printf("响应数据=%d,%s", dataLength, hexStr)
-
-	log.Printf("响应数据md5=%X", md5.Sum(out))
-	log.Printf("响应数据=[%s]", hex.EncodeToString(out))
-	out = LengthFieldPrepend(out)
-	return out
-}
-
-// 填充数据长度
-func LengthFieldPrepend(in []byte) []byte {
-	dataLength := len(in)
-	lenSize := 2
-	out := make([]byte, dataLength+lenSize)
-	lenBytes := make([]byte, lenSize)
-	binary.BigEndian.PutUint16(lenBytes, uint16(dataLength))
-	out[0] = lenBytes[0]
-	out[1] = lenBytes[1]
-	for i := 0; i < dataLength; i++ {
-		out[lenSize+i] = in[i]
-	}
-	return out
+	return biz
 }

@@ -2,7 +2,8 @@ package biz
 
 import (
 	"bytes"
-	"ehc-hsm-server/utils"
+	"ehc-hsm-server/pkg"
+	"ehc-hsm-server/pkg/rwbytes"
 	"encoding/binary"
 	hex "encoding/hex"
 	log "github.com/sirupsen/logrus"
@@ -22,15 +23,15 @@ import (
 // var9 %04X
 type S3Req struct {
 	ReqCode           string
-	Var1              int32
-	Var2              int32
+	Var1              int
+	Var2              int
 	Var3Ver           string //String.format("K%04d", 102 + ver * 2);
-	Var4IndexidLength int32  // 主索引.length() / 32
+	Var4IndexidLength int    // 主索引.length() / 32
 	Var5IndexidFactor string
-	Var6              int32  //固定值0
+	Var6              int    //固定值0
 	Var7              string //空值
-	Var8PaddingMode   int32  //PaddingMode
-	Var9DataLength    int32  //（证件类型+证件号码）长度
+	Var8PaddingMode   int    //PaddingMode
+	Var9DataLength    int    //（证件类型+证件号码）长度
 	Var9Data          []byte //（证件类型+证件号码）
 	Var10             string //空值
 }
@@ -53,52 +54,89 @@ func NewS3() *S3 {
 	return &S3{&req, &res}
 }
 
-func (c *S3) Decode(buf []byte) error {
+func (req *S3Req) Decode(buf []byte) error {
 	in := bytes.NewBuffer(buf)
 	log.Printf("请求内容S3Req=%s", strings.ToUpper(hex.EncodeToString(in.Bytes())))
 	var err error
-	c.req.ReqCode, _ = utils.ReadString(in, 2)
-	c.req.Var1, _ = utils.ReadInt(in, 2)
-	c.req.Var2, _ = utils.ReadIntHex(in, 3)
-	c.req.Var3Ver, _ = utils.ReadString(in, 5)
-	c.req.Var4IndexidLength, _ = utils.ReadInt(in, 2)
-	c.req.Var5IndexidFactor, _ = utils.ReadString(in, c.req.Var4IndexidLength*32)
-	c.req.Var6, _ = utils.ReadInt(in, 2)
-	//req.Var7 = utils.ReadString(in, 3);
-	c.req.Var8PaddingMode, _ = utils.ReadInt(in, 2) //ANSI_X919("ANSIX919PADDING", 2), 填充模式
-	c.req.Var9DataLength, _ = utils.ReadIntHex(in, 4)
-	c.req.Var9Data, err = utils.ReadBytes(in, c.req.Var9DataLength)
+	req.ReqCode, _ = rwbytes.ReadString(in, 2)
+	req.Var1, _ = rwbytes.ReadInt(in, 2)
+	req.Var2, _ = rwbytes.ReadIntHex(in, 3)
+	req.Var3Ver, _ = rwbytes.ReadString(in, 5)
+	req.Var4IndexidLength, _ = rwbytes.ReadInt(in, 2)
+	req.Var5IndexidFactor, _ = rwbytes.ReadString(in, req.Var4IndexidLength*32)
+	req.Var6, _ = rwbytes.ReadInt(in, 2)
+	//Req.Var7 = pkg.ReadString(in, 3);
+	req.Var8PaddingMode, _ = rwbytes.ReadInt(in, 2) //ANSI_X919("ANSIX919PADDING", 2), 填充模式
+	req.Var9DataLength, _ = rwbytes.ReadIntHex(in, 4)
+	req.Var9Data, err = rwbytes.ReadBytes(in, req.Var9DataLength)
 	if err != nil {
 		log.Printf("解析出错=%v", err)
 	}
 	return err
 }
 
-func (c *S3) setData(data []byte) {
+func (req *S3Req) Encode(buf []byte) ([]byte, error) {
+	in := new(bytes.Buffer)
+	rwbytes.WriteString(in, 2, req.ReqCode)
+	rwbytes.WriteInt(in, 2, req.Var1)
+	rwbytes.WriteIntHex(in, 3, req.Var2)
+	rwbytes.WriteString(in, 5, req.Var3Ver)
+	rwbytes.WriteInt(in, 2, req.Var4IndexidLength)
+	rwbytes.WriteString(in, req.Var4IndexidLength*32, req.Var5IndexidFactor)
+	rwbytes.WriteInt(in, 2, req.Var6)
+	//Req.Var7 = pkg.WriteString(in, 3);
+	rwbytes.WriteInt(in, 2, req.Var8PaddingMode) //ANSI_X919("ANSIX919PADDING", 2), 填充模式
+	rwbytes.WriteIntHex(in, 4, req.Var9DataLength)
+	rwbytes.WriteBytes(in, req.Var9DataLength, req.Var9Data)
+	return in.Bytes(), nil
+}
+
+func (res *S3Res) setData(data []byte) {
 	if data != nil {
-		c.res.data = data
-		c.res.dataLength = len(data)
+		res.data = data
+		res.dataLength = len(data)
 	} else {
-		c.res.data = nil
-		c.res.dataLength = 0
+		res.data = nil
+		res.dataLength = 0
 	}
 }
 
-func (c *S3) Encode() ([]byte, error) {
+func (res *S3Res) Decode(b []byte) error {
+	in := bytes.NewBuffer(b)
+	res.ReqCode, _ = rwbytes.ReadString(in, 2)
+	res.ErrCode, _ = rwbytes.ReadString(in, 2)
+	if "00" == res.ErrCode {
+		var bufLen = make([]byte, 2)
+		in.Read(bufLen)
+		binary.BigEndian.Uint16(bufLen)
+		res.dataLength = int(binary.BigEndian.Uint16(bufLen))
+		res.data, _ = rwbytes.ReadBytes(in, res.dataLength)
+	}
+	return nil
+}
+
+func (res *S3Res) Encode() ([]byte, error) {
 	buf := bytes.Buffer{}
-	buf.Write([]byte(c.res.ReqCode))
-	buf.Write([]byte(c.res.ErrCode))
+	buf.Write([]byte(res.ReqCode))
+	buf.Write([]byte(res.ErrCode))
 
 	//String hex = Integer.toHexString(DataLength);
 	//final byte[] len = Strings.padStart(hex, 4, '0').getBytes(Charsets.ISO_8859_1);
 	var bufLen = make([]byte, 2)
-	binary.BigEndian.PutUint16(bufLen, uint16(c.res.dataLength))
+	binary.BigEndian.PutUint16(bufLen, uint16(res.dataLength))
 	lenStr := hex.EncodeToString(bufLen)
 	buf.Write([]byte(lenStr))
-	if c.res.data != nil {
-		buf.Write(c.res.data)
+	if res.data != nil {
+		buf.Write(res.data)
 	}
 	return buf.Bytes(), nil
+}
+
+func (c *S3) Decode(buf []byte) error {
+	return c.req.Decode(buf)
+}
+func (c *S3) Encode() ([]byte, error) {
+	return c.res.Encode()
 }
 
 func (c *S3) Handle() error {
@@ -110,7 +148,7 @@ func (c *S3) Handle() error {
 		indexidFactor := c.req.Var5IndexidFactor
 		data, _ := hex.DecodeString(indexidFactor)
 		safeKey, _ := hex.DecodeString(SAFE_KEY)
-		ehcIdKeys, _ := utils.Sm4EncryptNoPadding(safeKey, data)
+		ehcIdKeys, _ := pkg.Sm4EncryptNoPadding(safeKey, data)
 		inputIdNo := c.req.Var9Data
 		log.Printf("用户身份认证密钥=%s", hex.EncodeToString(ehcIdKeys))
 		//如果是nopadding则传入的字节数据长度应该是16的倍数
@@ -120,11 +158,11 @@ func (c *S3) Handle() error {
 				idNoBytes[i] = inputIdNo[i]
 			}
 		}
-		ehcIds, err1 := utils.Sm4EncryptNoPadding(ehcIdKeys, idNoBytes)
+		ehcIds, err1 := pkg.Sm4EncryptNoPadding(ehcIdKeys, idNoBytes)
 		if err1 != nil {
 			log.Println("出错=", err1)
 		}
-		c.setData(ehcIds)
+		c.res.setData(ehcIds)
 		log.Printf("健康卡id=%s", strings.ToUpper(hex.EncodeToString(ehcIds)))
 	} else if c.req.Var4IndexidLength == 0 {
 		//// 加密时间
@@ -138,8 +176,8 @@ func (c *S3) Handle() error {
 				tmpBytes[i] = var9Data[i]
 			}
 		}
-		outData, _ := utils.Sm4EncryptNoPadding(facKeys, tmpBytes)
-		c.setData(outData)
+		outData, _ := pkg.Sm4EncryptNoPadding(facKeys, tmpBytes)
+		c.res.setData(outData)
 		log.Println("加密时间out={}", hex.EncodeToString(outData))
 	}
 	return nil

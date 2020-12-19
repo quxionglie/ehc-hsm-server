@@ -2,7 +2,7 @@ package biz
 
 import (
 	"bytes"
-	"ehc-hsm-server/utils"
+	"ehc-hsm-server/pkg/rwbytes"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"strings"
@@ -29,23 +29,46 @@ func NewCr() *Cr {
 	res := CrRes{ReqCode: "CS", ErrCode: "00"}
 	return &Cr{&req, &res}
 }
-
-func (c *Cr) Decode(in []byte) error {
+func (req *CrReq) Decode(in []byte) error {
 	buf := bytes.NewBuffer(in)
-	c.req.ReqCode, _ = utils.ReadString(buf, 2)
-	c.req.Seq, _ = utils.ReadString(buf, 4)
-	log.Printf("请求参数：%v", c.req)
+	req.ReqCode, _ = rwbytes.ReadString(buf, 2)
+	req.Seq, _ = rwbytes.ReadString(buf, 4)
+	log.Printf("请求参数：%v", req)
 	return nil
 }
 
-func (c *Cr) Encode() ([]byte, error) {
+func (req *CrReq) Encode() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	rwbytes.WriteString(buf, 2, req.ReqCode)
+	rwbytes.WriteString(buf, 4, req.Seq)
+	return buf.Bytes(), nil
+}
+
+func (res *CrRes) Decode(in []byte) error {
+	buf := bytes.NewBuffer(in)
+	res.ReqCode, _ = rwbytes.ReadString(buf, 2)
+	res.ErrCode, _ = rwbytes.ReadString(buf, 2)
+	if len(in) >= 20 {
+		//Res.Data, _ = rwbytes.ReadString(buf, 16)
+	}
+	return nil
+}
+
+func (res *CrRes) Encode() ([]byte, error) {
 	buf := bytes.Buffer{}
-	buf.Write([]byte(c.res.ReqCode))
-	buf.Write([]byte(c.res.ErrCode))
-	if c.res.Data != "" {
-		buf.Write([]byte(c.res.Data))
+	buf.Write([]byte(res.ReqCode))
+	buf.Write([]byte(res.ErrCode))
+	if res.Data != "" {
+		buf.Write([]byte(res.Data))
 	}
 	return buf.Bytes(), nil
+}
+
+func (c *Cr) Decode(buf []byte) error {
+	return c.req.Decode(buf)
+}
+func (c *Cr) Encode() ([]byte, error) {
+	return c.res.Encode()
 }
 
 func (c *Cr) Handle() error {
