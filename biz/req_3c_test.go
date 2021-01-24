@@ -1,6 +1,7 @@
 package biz
 
 import (
+	"ehc-hsm-server/hsm"
 	"encoding/hex"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,7 @@ func Test3c(t *testing.T) {
 	//buf := bytes.NewBuffer(byte[2:])
 	out, _ := req.Encode()
 	stdOut := strings.ToUpper("0026334430303332a59e97c486e8f1c29f46ea87a515e61db1eecf23076b4993f0e0c5cbebf909c8")
-	outHexStr := strings.ToUpper(hex.EncodeToString(LengthFieldPrepend(out)))
+	outHexStr := strings.ToUpper(hex.EncodeToString(hsm.LengthFieldPrepend(out)))
 	log.Printf("标准数据=[%s]", stdOut)
 	log.Printf("响应数据=[%s]", outHexStr)
 	assert.Equal(t, stdOut, outHexStr)

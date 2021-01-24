@@ -21,7 +21,7 @@ func init() {
 }
 
 func main() {
-	address := "127.0.0.1:18018"
+	address := ":18018"
 	log.Println("run hsm server in", address)
 	listen, err := net.Listen("tcp", address)
 	checkError(err)
